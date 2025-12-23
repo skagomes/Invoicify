@@ -1,78 +1,43 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, NavLink, Navigate } from 'react-router-dom';
-import { Client, Invoice, Settings } from '../../types';
-import { defaultSettings, sampleClients, sampleInvoices } from '../../lib/data';
 import Dashboard from '../dashboard/Dashboard';
 import ClientsPage from '../clients/ClientsPage';
 import InvoicesPage from '../invoices/InvoicesPage';
 import SettingsPage from '../settings/SettingsPage';
 import { FileText, Users, LayoutDashboard, Settings as SettingsIcon, Menu, X, LogOut } from 'lucide-react';
-import { useLocalStorage } from '../../hooks/useLocalStorage';
 import { useTranslation } from '../../lib/i18n';
 import { useAuth } from '../../contexts/AuthContext';
+import { useClients } from '../../hooks/useClients';
+import { useInvoices } from '../../hooks/useInvoices';
+import { useSettings } from '../../hooks/useSettings';
 import { clsx } from 'clsx';
 
 export const MainApp: React.FC = () => {
   const { t } = useTranslation();
   const { signOut, user, profile } = useAuth();
-  const [clients, setClients] = useLocalStorage<Client[]>('clients', sampleClients);
-  const [invoices, setInvoices] = useLocalStorage<Invoice[]>('invoices', sampleInvoices);
-  const [settings, setSettings] = useLocalStorage<Settings>('settings', defaultSettings);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
+  // Use Supabase hooks for data
+  const { clients, addClient, updateClient, deleteClient, canAddClient } = useClients();
+  const { invoices, addInvoice, updateInvoice, deleteInvoice, duplicateInvoice } = useInvoices();
+  const { settings, updateSettings, uploadLogo } = useSettings();
+
+  // Apply custom colors
   useEffect(() => {
-    const style = document.createElement('style');
-    style.innerHTML = `
-      :root {
-        --color-primary: ${settings.primaryColor || '#4f46e5'};
-        --color-secondary: ${settings.secondaryColor || '#ec4899'};
-      }
-    `;
-    document.head.appendChild(style);
-    return () => {
-      document.head.removeChild(style);
-    };
-  }, [settings.primaryColor, settings.secondaryColor]);
-
-  const addClient = (client: Omit<Client, 'id'>) => {
-    setClients(prev => [...prev, { ...client, id: Date.now().toString() }]);
-  };
-
-  const updateClient = (updatedClient: Client) => {
-    setClients(prev => prev.map(c => (c.id === updatedClient.id ? updatedClient : c)));
-  };
-
-  const deleteClient = (clientId: string) => {
-    setClients(prev => prev.filter(c => c.id !== clientId));
-    setInvoices(prev => prev.filter(i => i.clientId !== clientId));
-  };
-
-  const addInvoice = (invoice: Omit<Invoice, 'id' | 'invoiceNumber'>) => {
-    const newInvoiceNumber = (Math.max(0, ...invoices.map(i => parseInt(i.invoiceNumber.split('-')[1] || '0'))) + 1).toString().padStart(4, '0');
-    setInvoices(prev => [...prev, { ...invoice, id: Date.now().toString(), invoiceNumber: `INV-${newInvoiceNumber}` }]);
-  };
-
-  const updateInvoice = (updatedInvoice: Invoice) => {
-    setInvoices(prev => prev.map(i => (i.id === updatedInvoice.id ? updatedInvoice : i)));
-  };
-
-  const duplicateInvoice = (invoiceId: string) => {
-    const originalInvoice = invoices.find(inv => inv.id === invoiceId);
-    if (originalInvoice) {
-      const { id, invoiceNumber, issueDate, dueDate, status, ...rest } = originalInvoice;
-      const newInvoiceData = {
-        ...rest,
-        issueDate: new Date().toISOString().split('T')[0],
-        dueDate: '',
-        status: 'Pending' as 'Pending' | 'Paid',
+    if (settings) {
+      const style = document.createElement('style');
+      style.innerHTML = `
+        :root {
+          --color-primary: ${settings.primary_color || '#4f46e5'};
+          --color-secondary: ${settings.secondary_color || '#ec4899'};
+        }
+      `;
+      document.head.appendChild(style);
+      return () => {
+        document.head.removeChild(style);
       };
-      addInvoice(newInvoiceData);
     }
-  };
-
-  const deleteInvoice = (invoiceId: string) => {
-    setInvoices(prev => prev.filter(i => i.id !== invoiceId));
-  };
+  }, [settings?.primary_color, settings?.secondary_color]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -99,10 +64,10 @@ export const MainApp: React.FC = () => {
   const Sidebar: React.FC = () => (
     <aside className="print-hidden hidden md:flex flex-col w-64 h-screen px-4 py-8 overflow-y-auto bg-white border-r dark:bg-gray-800 dark:border-gray-700">
       <div className="flex items-center justify-center mb-8">
-        {settings.logo ? (
-          <img src={settings.logo} alt="Company Logo" className="h-10 object-contain" />
+        {settings?.logo_url ? (
+          <img src={settings.logo_url} alt="Company Logo" className="h-10 object-contain" />
         ) : (
-          <h1 className="text-2xl font-bold text-primary-600">{settings.companyName || 'Invoicify'}</h1>
+          <h1 className="text-2xl font-bold text-primary-600">{settings?.company_name || 'Invoicify'}</h1>
         )}
       </div>
 
@@ -114,12 +79,22 @@ export const MainApp: React.FC = () => {
       </nav>
 
       <div className="pt-4 mt-4 border-t dark:border-gray-700">
-        <div className="px-4 py-2 text-xs text-gray-500">
-          {user?.email || profile?.email}
+        <div className="px-4 py-2">
+          <p className="text-xs text-gray-500 truncate">{user?.email || profile?.email}</p>
+          {profile?.subscription_tier && (
+            <span className={clsx(
+              'inline-block mt-1 px-2 py-0.5 text-xs font-medium rounded',
+              profile.subscription_tier === 'pro'
+                ? 'bg-primary-100 text-primary-700'
+                : 'bg-gray-100 text-gray-700'
+            )}>
+              {profile.subscription_tier === 'pro' ? 'Pro' : 'Free'}
+            </span>
+          )}
         </div>
         <button
           onClick={handleSignOut}
-          className="flex items-center w-full px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+          className="flex items-center w-full px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors mt-2"
         >
           <LogOut size={20} />
           <span className="ml-4">Sign Out</span>
@@ -128,6 +103,18 @@ export const MainApp: React.FC = () => {
     </aside>
   );
 
+  // Show loading state while settings load
+  if (!settings) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
       <Sidebar />
@@ -135,10 +122,10 @@ export const MainApp: React.FC = () => {
         {/* Mobile Header */}
         <header className="print-hidden md:hidden flex justify-between items-center p-4 bg-white dark:bg-gray-800 border-b dark:border-gray-700">
           <div className="flex items-center">
-            {settings.logo ? (
-              <img src={settings.logo} alt="Company Logo" className="h-8 object-contain" />
+            {settings.logo_url ? (
+              <img src={settings.logo_url} alt="Company Logo" className="h-8 object-contain" />
             ) : (
-              <h1 className="text-xl font-bold text-primary-600">{settings.companyName || 'Invoicify'}</h1>
+              <h1 className="text-xl font-bold text-primary-600">{settings.company_name || 'Invoicify'}</h1>
             )}
           </div>
           <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
@@ -166,19 +153,94 @@ export const MainApp: React.FC = () => {
         {/* Main Content */}
         <main className="flex-1 p-4 md:p-8 overflow-y-auto">
           <Routes>
-            <Route path="/dashboard" element={<Dashboard clients={clients} invoices={invoices} settings={settings} />} />
+            <Route
+              path="/dashboard"
+              element={
+                <Dashboard
+                  clients={clients.map(c => ({ ...c, id: c.id, vatNumber: c.vat_number || '' }))}
+                  invoices={invoices.map(inv => ({
+                    ...inv,
+                    id: inv.id,
+                    clientId: inv.client_id,
+                    invoiceNumber: inv.invoice_number,
+                    issueDate: inv.issue_date,
+                    dueDate: inv.due_date,
+                    taxRate: Number(inv.tax_rate),
+                    status: inv.status as 'Pending' | 'Paid',
+                    lineItems: inv.line_items.map(li => ({
+                      id: li.id,
+                      description: li.description,
+                      quantity: li.quantity,
+                      rate: Number(li.rate),
+                    })),
+                  }))}
+                  settings={{
+                    companyName: settings.company_name || '',
+                    companyEmail: settings.company_email || '',
+                    companyAddress: settings.company_address || '',
+                    companyVAT: settings.company_vat_number || '',
+                    logo: settings.logo_url || '',
+                    primaryColor: settings.primary_color,
+                    secondaryColor: settings.secondary_color,
+                    currencySymbol: settings.currency_symbol,
+                    defaultTaxRate: Number(settings.default_tax_rate),
+                    language: settings.language as 'en' | 'fr',
+                  }}
+                />
+              }
+            />
             <Route
               path="/clients/*"
               element={
                 <ClientsPage
-                  clients={clients}
-                  invoices={invoices}
+                  clients={clients.map(c => ({ ...c, id: c.id, vatNumber: c.vat_number || '' }))}
+                  invoices={invoices.map(inv => ({
+                    ...inv,
+                    id: inv.id,
+                    clientId: inv.client_id,
+                    invoiceNumber: inv.invoice_number,
+                    issueDate: inv.issue_date,
+                    dueDate: inv.due_date,
+                    taxRate: Number(inv.tax_rate),
+                    status: inv.status as 'Pending' | 'Paid',
+                    lineItems: inv.line_items.map(li => ({
+                      id: li.id,
+                      description: li.description,
+                      quantity: li.quantity,
+                      rate: Number(li.rate),
+                    })),
+                  }))}
                   view={{ page: 'clients' }}
                   setView={() => {}}
-                  addClient={addClient}
-                  updateClient={updateClient}
+                  addClient={async (client) => {
+                    await addClient({
+                      name: client.name,
+                      email: client.email,
+                      address: client.address,
+                      vat_number: client.vatNumber,
+                    });
+                  }}
+                  updateClient={async (client) => {
+                    await updateClient(client.id, {
+                      name: client.name,
+                      email: client.email,
+                      address: client.address,
+                      vat_number: client.vatNumber,
+                    });
+                  }}
                   deleteClient={deleteClient}
-                  settings={settings}
+                  settings={{
+                    companyName: settings.company_name || '',
+                    companyEmail: settings.company_email || '',
+                    companyAddress: settings.company_address || '',
+                    companyVAT: settings.company_vat_number || '',
+                    logo: settings.logo_url || '',
+                    primaryColor: settings.primary_color,
+                    secondaryColor: settings.secondary_color,
+                    currencySymbol: settings.currency_symbol,
+                    defaultTaxRate: Number(settings.default_tax_rate),
+                    language: settings.language as 'en' | 'fr',
+                  }}
                 />
               }
             />
@@ -186,19 +248,121 @@ export const MainApp: React.FC = () => {
               path="/invoices/*"
               element={
                 <InvoicesPage
-                  invoices={invoices}
-                  clients={clients}
-                  settings={settings}
+                  invoices={invoices.map(inv => ({
+                    ...inv,
+                    id: inv.id,
+                    clientId: inv.client_id,
+                    invoiceNumber: inv.invoice_number,
+                    issueDate: inv.issue_date,
+                    dueDate: inv.due_date,
+                    taxRate: Number(inv.tax_rate),
+                    status: inv.status as 'Pending' | 'Paid',
+                    lineItems: inv.line_items.map(li => ({
+                      id: li.id,
+                      description: li.description,
+                      quantity: li.quantity,
+                      rate: Number(li.rate),
+                    })),
+                  }))}
+                  clients={clients.map(c => ({ ...c, id: c.id, vatNumber: c.vat_number || '' }))}
+                  settings={{
+                    companyName: settings.company_name || '',
+                    companyEmail: settings.company_email || '',
+                    companyAddress: settings.company_address || '',
+                    companyVAT: settings.company_vat_number || '',
+                    logo: settings.logo_url || '',
+                    primaryColor: settings.primary_color,
+                    secondaryColor: settings.secondary_color,
+                    currencySymbol: settings.currency_symbol,
+                    defaultTaxRate: Number(settings.default_tax_rate),
+                    language: settings.language as 'en' | 'fr',
+                  }}
                   view={{ page: 'invoices' }}
                   setView={() => {}}
-                  addInvoice={addInvoice}
-                  updateInvoice={updateInvoice}
+                  addInvoice={async (invoice) => {
+                    await addInvoice(
+                      {
+                        client_id: invoice.clientId,
+                        issue_date: invoice.issueDate,
+                        due_date: invoice.dueDate,
+                        tax_rate: invoice.taxRate,
+                        status: invoice.status,
+                      },
+                      invoice.lineItems.map(li => ({
+                        description: li.description,
+                        quantity: li.quantity,
+                        rate: li.rate,
+                      }))
+                    );
+                  }}
+                  updateInvoice={async (invoice) => {
+                    await updateInvoice(
+                      invoice.id,
+                      {
+                        client_id: invoice.clientId,
+                        issue_date: invoice.issueDate,
+                        due_date: invoice.dueDate,
+                        tax_rate: invoice.taxRate,
+                        status: invoice.status,
+                      },
+                      invoice.lineItems.map(li => ({
+                        description: li.description,
+                        quantity: li.quantity,
+                        rate: li.rate,
+                      }))
+                    );
+                  }}
                   deleteInvoice={deleteInvoice}
                   duplicateInvoice={duplicateInvoice}
                 />
               }
             />
-            <Route path="/settings" element={<SettingsPage settings={settings} setSettings={setSettings} />} />
+            <Route
+              path="/settings"
+              element={
+                <SettingsPage
+                  settings={{
+                    companyName: settings.company_name || '',
+                    companyEmail: settings.company_email || '',
+                    companyAddress: settings.company_address || '',
+                    companyVAT: settings.company_vat_number || '',
+                    logo: settings.logo_url || '',
+                    primaryColor: settings.primary_color,
+                    secondaryColor: settings.secondary_color,
+                    currencySymbol: settings.currency_symbol,
+                    defaultTaxRate: Number(settings.default_tax_rate),
+                    language: settings.language as 'en' | 'fr',
+                  }}
+                  setSettings={async (newSettings) => {
+                    if (typeof newSettings === 'function') {
+                      const updated = newSettings({
+                        companyName: settings.company_name || '',
+                        companyEmail: settings.company_email || '',
+                        companyAddress: settings.company_address || '',
+                        companyVAT: settings.company_vat_number || '',
+                        logo: settings.logo_url || '',
+                        primaryColor: settings.primary_color,
+                        secondaryColor: settings.secondary_color,
+                        currencySymbol: settings.currency_symbol,
+                        defaultTaxRate: Number(settings.default_tax_rate),
+                        language: settings.language as 'en' | 'fr',
+                      });
+                      await updateSettings({
+                        company_name: updated.companyName,
+                        company_email: updated.companyEmail,
+                        company_address: updated.companyAddress,
+                        company_vat_number: updated.companyVAT,
+                        primary_color: updated.primaryColor,
+                        secondary_color: updated.secondaryColor,
+                        currency_symbol: updated.currencySymbol,
+                        default_tax_rate: updated.defaultTaxRate,
+                        language: updated.language,
+                      });
+                    }
+                  }}
+                />
+              }
+            />
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
           </Routes>
         </main>
