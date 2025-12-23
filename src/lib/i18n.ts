@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useCallback, PropsWithChildren } from 'react';
-import { useLocalStorage } from './hooks';
+import { useLocalStorage } from '../hooks/useLocalStorage';
 
 type Language = 'en' | 'fr';
 type Translations = { [key: string]: string };
