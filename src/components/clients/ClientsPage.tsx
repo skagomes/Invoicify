@@ -1,8 +1,8 @@
 
 import React, { useState, useMemo } from 'react';
-import { Client, Invoice, Settings, View } from '../types';
+import { Client, Invoice, Settings, View } from '../../types';
 import { Plus, Search, Trash2, Edit, X, Mail, MapPin, User, ArrowLeft, DollarSign, CheckCircle, Hash } from 'lucide-react';
-import { useTranslation } from '../i18n';
+import { useTranslation } from '../../lib/i18n';
 
 interface ClientsPageProps {
   clients: Client[];

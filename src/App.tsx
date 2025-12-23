@@ -1,14 +1,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { Client, Invoice, Settings, View } from './types';
-import { defaultSettings, sampleClients, sampleInvoices } from './data';
-import Dashboard from './components/Dashboard';
-import ClientsPage from './components/ClientsPage';
-import InvoicesPage from './components/InvoicesPage';
-import SettingsPage from './components/SettingsPage';
+import { defaultSettings, sampleClients, sampleInvoices } from './lib/data';
+import Dashboard from './components/dashboard/Dashboard';
+import ClientsPage from './components/clients/ClientsPage';
+import InvoicesPage from './components/invoices/InvoicesPage';
+import SettingsPage from './components/settings/SettingsPage';
 import { FileText, Users, LayoutDashboard, Settings as SettingsIcon, Menu, X } from 'lucide-react';
-import { useLocalStorage } from './hooks';
-import { LanguageProvider, useTranslation } from './i18n';
+import { useLocalStorage } from './hooks/useLocalStorage';
+import { LanguageProvider, useTranslation } from './lib/i18n';
 
 const AppContent: React.FC = () => {
   const { t } = useTranslation();

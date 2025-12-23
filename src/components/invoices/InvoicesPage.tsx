@@ -1,8 +1,8 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Client, Invoice, InvoiceLineItem, Settings, View, InvoiceStatus } from '../types';
+import { Client, Invoice, InvoiceLineItem, Settings, View, InvoiceStatus } from '../../types';
 import { Plus, Search, Trash2, Edit, X, ArrowLeft, Printer, Copy, MoreVertical } from 'lucide-react';
-import { useTranslation } from '../i18n';
+import { useTranslation } from '../../lib/i18n';
 
 interface InvoicesPageProps {
   invoices: Invoice[];

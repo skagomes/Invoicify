@@ -1,8 +1,8 @@
 
 import React from 'react';
-import { Client, Invoice, Settings } from '../types';
+import { Client, Invoice, Settings } from '../../types';
 import { DollarSign, Users, FileText } from 'lucide-react';
-import { useTranslation } from '../i18n';
+import { useTranslation } from '../../lib/i18n';
 
 interface DashboardProps {
   clients: Client[];

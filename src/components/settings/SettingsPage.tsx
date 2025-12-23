@@ -1,8 +1,8 @@
 
 import React from 'react';
-import { Settings } from '../types';
+import { Settings } from '../../types';
 import { Building, Mail, MapPin, Palette, UploadCloud, BadgeDollarSign, Percent, Globe, Hash } from 'lucide-react';
-import { useTranslation } from '../i18n';
+import { useTranslation } from '../../lib/i18n';
 
 interface SettingsPageProps {
   settings: Settings;
