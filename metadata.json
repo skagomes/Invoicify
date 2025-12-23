@@ -1,0 +1,5 @@
+{
+  "name": "Invoicify - Invoice & Client Manager",
+  "description": "A comprehensive Invoice & Client Management Web App to streamline your business finances. Manage clients, create professional invoices, track payments, and customize branding, all with data saved locally in your browser.",
+  "requestFramePermissions": []
+}
