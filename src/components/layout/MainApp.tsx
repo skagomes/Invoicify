@@ -329,7 +329,7 @@ export const MainApp: React.FC = () => {
                   view={invoicesView}
                   setView={setInvoicesView}
                   addInvoice={async (invoice) => {
-                    await addInvoice(
+                    return await addInvoice(
                       {
                         client_id: invoice.clientId,
                         issue_date: invoice.issueDate,
@@ -345,7 +345,7 @@ export const MainApp: React.FC = () => {
                     );
                   }}
                   updateInvoice={async (invoice) => {
-                    await updateInvoice(
+                    return await updateInvoice(
                       invoice.id,
                       {
                         client_id: invoice.clientId,

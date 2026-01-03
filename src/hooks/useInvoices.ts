@@ -92,6 +92,10 @@ export const useInvoices = () => {
 
     try {
       const newInvoice = await invoicesApi.create(invoice, lineItems);
+
+      // Optimistic update: Immediately add to local state
+      setInvoices(prev => [newInvoice, ...prev]);
+
       toast.success('Invoice created successfully');
       return newInvoice;
     } catch (err) {
@@ -109,6 +113,10 @@ export const useInvoices = () => {
   ) => {
     try {
       const updated = await invoicesApi.update(id, updates, lineItems);
+
+      // Optimistic update: Immediately replace in local state
+      setInvoices(prev => prev.map(inv => inv.id === id ? updated : inv));
+
       toast.success('Invoice updated successfully');
       return updated;
     } catch (err) {
@@ -122,6 +130,10 @@ export const useInvoices = () => {
   const deleteInvoice = async (id: string) => {
     try {
       await invoicesApi.delete(id);
+
+      // Optimistic update: Immediately remove from local state
+      setInvoices(prev => prev.filter(inv => inv.id !== id));
+
       toast.success('Invoice deleted successfully');
     } catch (err) {
       toast.error('Failed to delete invoice');
@@ -156,6 +168,9 @@ export const useInvoices = () => {
           rate: item.rate,
         }))
       );
+
+      // Optimistic update: Immediately add to local state
+      setInvoices(prev => [newInvoice, ...prev]);
 
       toast.success('Invoice duplicated successfully');
       return newInvoice;

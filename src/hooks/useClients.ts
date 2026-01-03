@@ -84,6 +84,10 @@ export const useClients = () => {
 
     try {
       const newClient = await clientsApi.create(client);
+
+      // Optimistic update: Immediately add to local state
+      setClients(prev => [newClient, ...prev]);
+
       toast.success('Client added successfully');
       return newClient;
     } catch (err) {
@@ -97,6 +101,10 @@ export const useClients = () => {
   const updateClient = async (id: string, updates: Partial<Client>) => {
     try {
       const updated = await clientsApi.update(id, updates);
+
+      // Optimistic update: Immediately replace in local state
+      setClients(prev => prev.map(client => client.id === id ? updated : client));
+
       toast.success('Client updated successfully');
       return updated;
     } catch (err) {
@@ -110,6 +118,10 @@ export const useClients = () => {
   const deleteClient = async (id: string) => {
     try {
       await clientsApi.delete(id);
+
+      // Optimistic update: Immediately remove from local state
+      setClients(prev => prev.filter(client => client.id !== id));
+
       toast.success('Client deleted successfully');
     } catch (err) {
       toast.error('Failed to delete client');
