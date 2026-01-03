@@ -17,9 +17,16 @@ interface InvoicesPageProps {
   updateInvoice: (invoice: Invoice) => void;
   deleteInvoice: (invoiceId: string) => void;
   duplicateInvoice: (invoiceId: string) => void;
+  // Pagination
+  page: number;
+  totalPages: number;
+  totalCount: number;
+  pageSize: number;
+  nextPage: () => void;
+  prevPage: () => void;
 }
 
-const InvoiceForm: React.FC<Omit<InvoicesPageProps, 'invoices' | 'view' | 'deleteInvoice' | 'duplicateInvoice'>> = ({ setView, addInvoice, updateInvoice, clients, settings }) => {
+const InvoiceForm: React.FC<Omit<InvoicesPageProps, 'invoices' | 'view' | 'deleteInvoice' | 'duplicateInvoice' | 'page' | 'totalPages' | 'totalCount' | 'pageSize' | 'nextPage' | 'prevPage'>> = ({ setView, addInvoice, updateInvoice, clients, settings }) => {
     const { t } = useTranslation();
     const invoiceToEdit = (window.history.state?.usr?.invoiceToEdit as Invoice | undefined);
     const invoiceToDuplicate = (window.history.state?.usr?.invoiceToDuplicate as Invoice | undefined);
@@ -366,7 +373,21 @@ const InvoiceView: React.FC<Omit<InvoicesPageProps, 'view' | 'addInvoice' | 'dup
 };
 
 const InvoicesPage: React.FC<InvoicesPageProps> = (props) => {
-    const { view, invoices, clients, settings, setView, deleteInvoice, duplicateInvoice } = props;
+    const {
+        view,
+        invoices,
+        clients,
+        settings,
+        setView,
+        deleteInvoice,
+        duplicateInvoice,
+        page,
+        totalPages,
+        totalCount,
+        pageSize,
+        nextPage,
+        prevPage,
+    } = props;
     const { t } = useTranslation();
     
     const [searchTerm, setSearchTerm] = useState('');
@@ -492,6 +513,44 @@ const InvoicesPage: React.FC<InvoicesPageProps> = (props) => {
                         </tbody>
                     </table>
                 </div>
+
+                {/* Pagination Controls */}
+                {totalPages > 1 && (
+                    <div className="px-6 py-4 border-t dark:border-gray-700 flex items-center justify-between">
+                        <div className="text-sm text-gray-700 dark:text-gray-300">
+                            Showing <span className="font-medium">{(page - 1) * pageSize + 1}</span> to{' '}
+                            <span className="font-medium">{Math.min(page * pageSize, totalCount)}</span> of{' '}
+                            <span className="font-medium">{totalCount}</span> invoices
+                        </div>
+                        <div className="flex items-center space-x-2">
+                            <button
+                                onClick={prevPage}
+                                disabled={page === 1}
+                                className={`px-4 py-2 text-sm font-medium rounded-md ${
+                                    page === 1
+                                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500'
+                                        : 'bg-white text-gray-700 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 border border-gray-300 dark:border-gray-600'
+                                }`}
+                            >
+                                Previous
+                            </button>
+                            <span className="text-sm text-gray-700 dark:text-gray-300">
+                                Page {page} of {totalPages}
+                            </span>
+                            <button
+                                onClick={nextPage}
+                                disabled={page === totalPages}
+                                className={`px-4 py-2 text-sm font-medium rounded-md ${
+                                    page === totalPages
+                                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500'
+                                        : 'bg-white text-gray-700 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 border border-gray-300 dark:border-gray-600'
+                                }`}
+                            >
+                                Next
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
 
             {selectedInvoiceForMenu && menuPosition && (

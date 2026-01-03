@@ -13,18 +13,27 @@ export interface InvoiceWithLineItems extends Invoice {
 }
 
 export const invoicesApi = {
-  // Get all invoices for the current user with line items
-  async getAll() {
-    const { data, error } = await supabase
+  // Get all invoices for the current user with line items (with pagination)
+  async getAll(options?: { page?: number; pageSize?: number }) {
+    const page = options?.page || 1;
+    const pageSize = options?.pageSize || 20;
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+
+    const { data, error, count } = await supabase
       .from('invoices')
       .select(`
         *,
         line_items:invoice_line_items(*)
-      `)
-      .order('created_at', { ascending: false });
+      `, { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(from, to);
 
     if (error) throw error;
-    return data as InvoiceWithLineItems[];
+    return {
+      data: data as InvoiceWithLineItems[],
+      count: count || 0,
+    };
   },
 
   // Get a single invoice by ID with line items
