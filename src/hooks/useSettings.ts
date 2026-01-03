@@ -6,62 +6,51 @@ import toast from 'react-hot-toast';
 type Settings = Database['public']['Tables']['settings']['Row'];
 type SettingsUpdate = Database['public']['Tables']['settings']['Update'];
 
-const DEFAULT_SETTINGS: Partial<Settings> = {
-  company_name: '',
-  company_email: '',
-  company_address: '',
-  company_vat_number: '',
-  logo_url: null,
-  primary_color: '#6366f1',
-  secondary_color: '#8b5cf6',
-  currency_symbol: '$',
-  default_tax_rate: 20,
-  language: 'en',
-};
-
 export const useSettings = () => {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
   // Fetch settings
-  const fetchSettings = useCallback(async () => {
+  // isInitial: true = show loading spinner, false = background refresh
+  const fetchSettings = useCallback(async (isInitial: boolean = true) => {
     try {
-      setLoading(true);
+      // Only show loading spinner on initial load, not on background refreshes
+      if (isInitial) {
+        setLoading(true);
+      }
       setError(null); // Clear previous errors
 
       const data = await settingsApi.get();
 
-      // If no settings exist, create default ones
+      // If no settings exist, rely on the database trigger 'handle_new_user' to create them.
+      // Don't attempt client-side creation to avoid race conditions and duplicate key errors.
       if (!data) {
-        console.log('No settings found, creating default settings...');
-        try {
-          const created = await settingsApi.create(DEFAULT_SETTINGS);
-          setSettings(created);
-          console.log('Default settings created successfully');
-        } catch (createError) {
-          console.error('Failed to create default settings:', createError);
-          // If creation fails, still throw to be caught by outer catch
-          throw new Error(`Failed to create settings: ${createError}`);
-        }
+        console.warn('No settings found. The database trigger should create them automatically.');
+        // Set to null and let MainApp show the error/retry view
+        setSettings(null);
+        setError(new Error('Settings not found. Please refresh the page or contact support if the issue persists.'));
       } else {
         setSettings(data);
+        setError(null);
       }
-
-      setError(null);
     } catch (err) {
       console.error('Error in fetchSettings:', err);
       const error = err as Error;
       setError(error);
-      toast.error('Failed to load settings. Please try refreshing the page.');
+      if (isInitial) {
+        toast.error('Failed to load settings. Please try refreshing the page.');
+      }
     } finally {
-      setLoading(false);
+      if (isInitial) {
+        setLoading(false);
+      }
     }
   }, []);
 
-  // Initial fetch
+  // Initial fetch with loading spinner
   useEffect(() => {
-    fetchSettings();
+    fetchSettings(true);
   }, [fetchSettings]);
 
   // Update settings
@@ -98,6 +87,6 @@ export const useSettings = () => {
     error,
     updateSettings,
     uploadLogo,
-    refresh: fetchSettings,
+    refresh: () => fetchSettings(false), // Background refresh without loading spinner
   };
 };
