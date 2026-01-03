@@ -27,7 +27,19 @@ export const MainApp: React.FC = () => {
 
   // Use Supabase hooks for data
   const { clients, addClient, updateClient, deleteClient, canAddClient } = useClients();
-  const { invoices, addInvoice, updateInvoice, deleteInvoice, duplicateInvoice } = useInvoices();
+  const {
+    invoices,
+    addInvoice,
+    updateInvoice,
+    deleteInvoice,
+    duplicateInvoice,
+    page,
+    totalPages,
+    totalCount,
+    pageSize,
+    nextPage,
+    prevPage,
+  } = useInvoices();
   const { settings, loading: settingsLoading, error: settingsError, updateSettings, uploadLogo } = useSettings();
 
   // Apply custom colors
@@ -363,6 +375,12 @@ export const MainApp: React.FC = () => {
                   }}
                   deleteInvoice={deleteInvoice}
                   duplicateInvoice={duplicateInvoice}
+                  page={page}
+                  totalPages={totalPages}
+                  totalCount={totalCount}
+                  pageSize={pageSize}
+                  nextPage={nextPage}
+                  prevPage={prevPage}
                 />
               }
             />

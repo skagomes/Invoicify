@@ -15,12 +15,19 @@ export const useInvoices = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const pageSize = 20;
+  const totalPages = Math.ceil(totalCount / pageSize);
+
   // Fetch invoices (with optional loading state)
-  const fetchInvoices = useCallback(async (showLoading = false) => {
+  const fetchInvoices = useCallback(async (showLoading = false, currentPage = page) => {
     try {
       if (showLoading) setLoading(true);
-      const data = await invoicesApi.getAll();
+      const { data, count } = await invoicesApi.getAll({ page: currentPage, pageSize });
       setInvoices(data);
+      setTotalCount(count);
       setError(null);
     } catch (err) {
       setError(err as Error);
@@ -31,12 +38,31 @@ export const useInvoices = () => {
     } finally {
       if (showLoading) setLoading(false);
     }
-  }, []);
+  }, [page]);
 
   // Initial fetch
   useEffect(() => {
-    fetchInvoices(true); // Show loading on initial fetch
-  }, [fetchInvoices]);
+    fetchInvoices(true, page); // Show loading on initial fetch
+  }, [page]); // Refetch when page changes
+
+  // Pagination controls
+  const nextPage = useCallback(() => {
+    if (page < totalPages) {
+      setPage(prev => prev + 1);
+    }
+  }, [page, totalPages]);
+
+  const prevPage = useCallback(() => {
+    if (page > 1) {
+      setPage(prev => prev - 1);
+    }
+  }, [page]);
+
+  const goToPage = useCallback((newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setPage(newPage);
+    }
+  }, [totalPages]);
 
   // Real-time subscription (user-specific)
   useEffect(() => {
@@ -54,7 +80,7 @@ export const useInvoices = () => {
         },
         async () => {
           try {
-            await fetchInvoices(false);
+            await fetchInvoices(false, page);
           } catch (error) {
             console.error('Real-time sync error (invoices):', error);
           }
@@ -68,7 +94,7 @@ export const useInvoices = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user?.id, fetchInvoices]);
+  }, [user?.id, page, fetchInvoices]);
 
   // Check if user can add more invoices (free tier limit)
   const canAddInvoice = async () => {
@@ -93,8 +119,13 @@ export const useInvoices = () => {
     try {
       const newInvoice = await invoicesApi.create(invoice, lineItems);
 
-      // Optimistic update: Immediately add to local state
-      setInvoices(prev => [newInvoice, ...prev]);
+      // Optimistic update: Immediately add to local state if on page 1
+      if (page === 1) {
+        setInvoices(prev => [newInvoice, ...prev.slice(0, pageSize - 1)]);
+      }
+
+      // Refetch to update counts and ensure data consistency
+      await fetchInvoices(false, page);
 
       toast.success('Invoice created successfully');
       return newInvoice;
@@ -117,6 +148,9 @@ export const useInvoices = () => {
       // Optimistic update: Immediately replace in local state
       setInvoices(prev => prev.map(inv => inv.id === id ? updated : inv));
 
+      // Refetch to ensure data consistency (in case update changed sort order)
+      await fetchInvoices(false, page);
+
       toast.success('Invoice updated successfully');
       return updated;
     } catch (err) {
@@ -133,6 +167,15 @@ export const useInvoices = () => {
 
       // Optimistic update: Immediately remove from local state
       setInvoices(prev => prev.filter(inv => inv.id !== id));
+
+      // Refetch to update counts and ensure we're not on an empty page
+      await fetchInvoices(false, page);
+
+      // If the current page is now empty and we're not on page 1, go back one page
+      const newTotalPages = Math.ceil((totalCount - 1) / pageSize);
+      if (page > 1 && page > newTotalPages) {
+        setPage(prev => prev - 1);
+      }
 
       toast.success('Invoice deleted successfully');
     } catch (err) {
@@ -169,8 +212,13 @@ export const useInvoices = () => {
         }))
       );
 
-      // Optimistic update: Immediately add to local state
-      setInvoices(prev => [newInvoice, ...prev]);
+      // Optimistic update: Immediately add to local state if on page 1
+      if (page === 1) {
+        setInvoices(prev => [newInvoice, ...prev.slice(0, pageSize - 1)]);
+      }
+
+      // Refetch to update counts and ensure data consistency
+      await fetchInvoices(false, page);
 
       toast.success('Invoice duplicated successfully');
       return newInvoice;
@@ -189,6 +237,14 @@ export const useInvoices = () => {
     updateInvoice,
     deleteInvoice,
     duplicateInvoice,
-    refresh: () => fetchInvoices(true),
+    refresh: () => fetchInvoices(true, page),
+    // Pagination
+    page,
+    totalPages,
+    totalCount,
+    pageSize,
+    nextPage,
+    prevPage,
+    goToPage,
   };
 };
