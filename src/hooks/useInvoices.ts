@@ -60,23 +60,9 @@ export const useInvoices = () => {
           }
         }
       )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'invoice_line_items',
-          // Note: Can't filter by user_id here since line_items don't have user_id
-          // This will trigger for all users, but the fetchInvoices() call has RLS
-        },
-        async () => {
-          try {
-            await fetchInvoices(false);
-          } catch (error) {
-            console.error('Real-time sync error (line items):', error);
-          }
-        }
-      )
+      // ❌ REMOVED: invoice_line_items subscription (thundering herd problem)
+      // Line item changes trigger invoice updates via updated_at, so the invoices
+      // subscription above will catch all changes automatically
       .subscribe();
 
     return () => {
