@@ -80,7 +80,7 @@ const InvoiceForm: React.FC<Omit<InvoicesPageProps, 'invoices' | 'view' | 'delet
     const taxAmount = useMemo(() => subtotal * (invoiceData.taxRate / 100), [subtotal, invoiceData.taxRate]);
     const total = useMemo(() => subtotal + taxAmount, [subtotal, taxAmount]);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
         // Validate clientId
@@ -111,12 +111,30 @@ const InvoiceForm: React.FC<Omit<InvoicesPageProps, 'invoices' | 'view' | 'delet
             return;
         }
 
-        if ('id' in invoiceData) {
-            updateInvoice(invoiceData as Invoice);
-        } else {
-            addInvoice(invoiceData);
+        try {
+            if ('id' in invoiceData) {
+                // Update existing invoice
+                await updateInvoice(invoiceData as Invoice);
+                // Navigate to the updated invoice view
+                setView({ page: 'invoiceView', id: invoiceData.id });
+            } else {
+                // Create new invoice
+                const createdInvoice = await addInvoice(invoiceData);
+
+                // Navigate to the created invoice view (or back to list if creation failed)
+                if (createdInvoice && createdInvoice.id) {
+                    setView({ page: 'invoiceView', id: createdInvoice.id });
+                } else {
+                    // If creation failed or returned null (e.g., tier limit), stay on form
+                    // The error is already shown via toast
+                    return;
+                }
+            }
+        } catch (err) {
+            console.error('Error saving invoice:', err);
+            // Error is already handled by the hooks with toast notifications
+            // Stay on the form so user can fix issues
         }
-        setView({ page: 'invoices' });
     };
 
     return (
