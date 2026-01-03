@@ -12,6 +12,7 @@ interface ClientsPageProps {
   addClient: (client: Omit<Client, 'id'>) => void;
   updateClient: (client: Client) => void;
   deleteClient: (clientId: string) => void;
+  onNavigateToInvoice: (id: string) => void;
   settings: Settings;
 }
 
@@ -72,7 +73,7 @@ const ClientFormModal: React.FC<{ client?: Client; onSave: (client: Client | Omi
   );
 };
 
-const ClientDetail: React.FC<Omit<ClientsPageProps, 'view' | 'addClient' | 'updateClient'> & { clientId: string }> = ({ clientId, clients, invoices, settings, setView, deleteClient }) => {
+const ClientDetail: React.FC<Omit<ClientsPageProps, 'view' | 'addClient' | 'updateClient'> & { clientId: string }> = ({ clientId, clients, invoices, settings, setView, deleteClient, onNavigateToInvoice }) => {
   const { t } = useTranslation();
   const client = clients.find(c => c.id === clientId);
   const clientInvoices = invoices.filter(i => i.clientId === clientId);
@@ -160,7 +161,7 @@ const ClientDetail: React.FC<Omit<ClientsPageProps, 'view' | 'addClient' | 'upda
                     </td>
                     <td className="px-6 py-4">{`${settings.currencySymbol}${total.toFixed(2)}`}</td>
                      <td className="px-6 py-4">
-                      <button onClick={() => setView({ page: 'invoiceView', id: invoice.id })} className="font-medium text-[var(--color-primary)] hover:underline">{t('view')}</button>
+                      <button onClick={() => onNavigateToInvoice(invoice.id)} className="font-medium text-[var(--color-primary)] hover:underline">{t('view')}</button>
                     </td>
                   </tr>
                 )

@@ -9,6 +9,43 @@ interface SettingsPageProps {
   setSettings: React.Dispatch<React.SetStateAction<Settings>>;
 }
 
+// Move InputField component outside to prevent remounting on every render
+const InputField: React.FC<{
+  name: keyof Settings;
+  label: string;
+  icon: React.ReactNode;
+  type?: string;
+  isTextarea?: boolean;
+  settings: Settings;
+  handleChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
+}> = ({ name, label, icon, type = 'text', isTextarea = false, settings, handleChange }) => (
+  <div>
+    <label htmlFor={name} className="flex items-center text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+      {icon}
+      <span className="ml-2">{label}</span>
+    </label>
+    {isTextarea ? (
+      <textarea
+        id={name}
+        name={name}
+        value={settings[name] as string || ''}
+        onChange={handleChange}
+        rows={3}
+        className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)] sm:text-sm text-gray-900 dark:text-gray-200"
+      />
+    ) : (
+      <input
+        type={type}
+        id={name}
+        name={name}
+        value={settings[name] as string || ''}
+        onChange={handleChange}
+        className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)] sm:text-sm text-gray-900 dark:text-gray-200"
+      />
+    )}
+  </div>
+);
+
 const SettingsPage: React.FC<SettingsPageProps> = ({ settings, setSettings }) => {
   const { t, language, setLanguage } = useTranslation();
 
@@ -22,39 +59,16 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ settings, setSettings }) =>
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
+        // Immediate local preview for instant feedback
         setSettings(prev => ({ ...prev, logo: reader.result as string }));
       };
       reader.readAsDataURL(file);
+
+      // Note: The actual upload to Supabase Storage should be handled by the parent component
+      // via the setSettings callback which should call uploadLogo API
+      // The preview above provides instant visual feedback while upload happens
     }
   };
-
-  const InputField: React.FC<{ name: keyof Settings; label: string; icon: React.ReactNode; type?: string; isTextarea?: boolean }> = ({ name, label, icon, type = 'text', isTextarea = false }) => (
-    <div>
-        <label htmlFor={name} className="flex items-center text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            {icon}
-            <span className="ml-2">{label}</span>
-        </label>
-        {isTextarea ? (
-            <textarea
-                id={name}
-                name={name}
-                value={settings[name] as string || ''}
-                onChange={handleChange}
-                rows={3}
-                className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)] sm:text-sm text-gray-900 dark:text-gray-200"
-            />
-        ) : (
-            <input
-                type={type}
-                id={name}
-                name={name}
-                value={settings[name] as string || ''}
-                onChange={handleChange}
-                className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)] sm:text-sm text-gray-900 dark:text-gray-200"
-            />
-        )}
-    </div>
-);
 
 
   return (
@@ -65,12 +79,12 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ settings, setSettings }) =>
         <h2 className="text-xl font-semibold mb-4 text-gray-700 dark:text-gray-200">{t('companyInfo')}</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="md:col-span-2">
-            <InputField name="companyName" label={t('companyName')} icon={<Building size={16}/>} />
+            <InputField name="companyName" label={t('companyName')} icon={<Building size={16}/>} settings={settings} handleChange={handleChange} />
           </div>
-          <InputField name="companyEmail" label={t('companyEmail')} icon={<Mail size={16}/>} type="email" />
-          <InputField name="companyVat" label={t('vatNumber')} icon={<Hash size={16}/>} />
+          <InputField name="companyEmail" label={t('companyEmail')} icon={<Mail size={16}/>} type="email" settings={settings} handleChange={handleChange} />
+          <InputField name="companyVat" label={t('vatNumber')} icon={<Hash size={16}/>} settings={settings} handleChange={handleChange} />
           <div className="md:col-span-2">
-            <InputField name="companyAddress" label={t('companyAddress')} icon={<MapPin size={16}/>} isTextarea />
+            <InputField name="companyAddress" label={t('companyAddress')} icon={<MapPin size={16}/>} isTextarea settings={settings} handleChange={handleChange} />
           </div>
         </div>
       </div>
@@ -109,8 +123,8 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ settings, setSettings }) =>
       <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
         <h2 className="text-xl font-semibold mb-4 text-gray-700 dark:text-gray-200">{t('financials')}</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <InputField name="currencySymbol" label={t('currencySymbol')} icon={<BadgeDollarSign size={16}/>} />
-            <InputField name="defaultTaxRate" label={t('defaultTaxRate')} icon={<Percent size={16}/>} type="number" />
+            <InputField name="currencySymbol" label={t('currencySymbol')} icon={<BadgeDollarSign size={16}/>} settings={settings} handleChange={handleChange} />
+            <InputField name="defaultTaxRate" label={t('defaultTaxRate')} icon={<Percent size={16}/>} type="number" settings={settings} handleChange={handleChange} />
         </div>
       </div>
 

@@ -73,6 +73,12 @@ export const MainApp: React.FC = () => {
     }
   };
 
+  // Handler to navigate from ClientDetail to Invoice view
+  const handleNavigateToInvoice = (id: string) => {
+    setInvoicesView({ page: 'invoiceView', id });
+    navigate('/invoices');
+  };
+
   const NavItem: React.FC<{ to: string; icon: React.ReactNode; label: string; onClick?: () => void }> = ({ to, icon, label, onClick }) => (
     <NavLink
       to={to}
@@ -290,6 +296,7 @@ export const MainApp: React.FC = () => {
                     });
                   }}
                   deleteClient={deleteClient}
+                  onNavigateToInvoice={handleNavigateToInvoice}
                   settings={{
                     companyName: settings.company_name || '',
                     companyEmail: settings.company_email || '',
