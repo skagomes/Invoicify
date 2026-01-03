@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { settingsApi } from '../lib/api';
 import type { Database } from '../types/database';
 import toast from 'react-hot-toast';
@@ -25,32 +25,44 @@ export const useSettings = () => {
   const [error, setError] = useState<Error | null>(null);
 
   // Fetch settings
-  const fetchSettings = async () => {
+  const fetchSettings = useCallback(async () => {
     try {
       setLoading(true);
+      setError(null); // Clear previous errors
+
       const data = await settingsApi.get();
 
       // If no settings exist, create default ones
       if (!data) {
-        const created = await settingsApi.create(DEFAULT_SETTINGS);
-        setSettings(created);
+        console.log('No settings found, creating default settings...');
+        try {
+          const created = await settingsApi.create(DEFAULT_SETTINGS);
+          setSettings(created);
+          console.log('Default settings created successfully');
+        } catch (createError) {
+          console.error('Failed to create default settings:', createError);
+          // If creation fails, still throw to be caught by outer catch
+          throw new Error(`Failed to create settings: ${createError}`);
+        }
       } else {
         setSettings(data);
       }
 
       setError(null);
     } catch (err) {
-      setError(err as Error);
-      toast.error('Failed to load settings');
+      console.error('Error in fetchSettings:', err);
+      const error = err as Error;
+      setError(error);
+      toast.error('Failed to load settings. Please try refreshing the page.');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   // Initial fetch
   useEffect(() => {
     fetchSettings();
-  }, []);
+  }, [fetchSettings]);
 
   // Update settings
   const updateSettings = async (updates: SettingsUpdate) => {
@@ -60,6 +72,7 @@ export const useSettings = () => {
       toast.success('Settings updated successfully');
       return updated;
     } catch (err) {
+      console.error('Error updating settings:', err);
       toast.error('Failed to update settings');
       throw err;
     }
@@ -73,6 +86,7 @@ export const useSettings = () => {
       toast.success('Logo uploaded successfully');
       return updated;
     } catch (err) {
+      console.error('Error uploading logo:', err);
       toast.error('Failed to upload logo');
       throw err;
     }

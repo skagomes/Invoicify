@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { clientsApi } from '../lib/api';
 import type { Database } from '../types/database';
@@ -9,45 +9,55 @@ import { FREE_TIER_LIMITS } from '../config/constants';
 type Client = Database['public']['Tables']['clients']['Row'];
 
 export const useClients = () => {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  // Fetch clients
-  const fetchClients = async () => {
+  // Fetch clients (with optional loading state)
+  const fetchClients = useCallback(async (showLoading = false) => {
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
       const data = await clientsApi.getAll();
       setClients(data);
       setError(null);
     } catch (err) {
       setError(err as Error);
-      toast.error('Failed to load clients');
+      if (showLoading) {
+        toast.error('Failed to load clients');
+      }
+      console.error('Error fetching clients:', err);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
-  };
+  }, []);
 
   // Initial fetch
   useEffect(() => {
-    fetchClients();
-  }, []);
+    fetchClients(true); // Show loading on initial fetch
+  }, [fetchClients]);
 
-  // Real-time subscription
+  // Real-time subscription (user-specific)
   useEffect(() => {
+    if (!user?.id) return;
+
     const channel = supabase
-      .channel('clients_changes')
+      .channel(`clients_changes_${user.id}`)
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
           table: 'clients',
+          filter: `user_id=eq.${user.id}`, // ✅ Only listen to current user's changes
         },
-        () => {
-          // Refetch when any change occurs
-          fetchClients();
+        async () => {
+          // Refetch in background (no loading state)
+          try {
+            await fetchClients(false);
+          } catch (error) {
+            console.error('Real-time sync error:', error);
+          }
         }
       )
       .subscribe();
@@ -55,7 +65,7 @@ export const useClients = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [user?.id, fetchClients]);
 
   // Check if user can add more clients (free tier limit)
   const canAddClient = () => {
@@ -78,6 +88,7 @@ export const useClients = () => {
       return newClient;
     } catch (err) {
       toast.error('Failed to add client');
+      console.error('Error adding client:', err);
       throw err;
     }
   };
@@ -90,6 +101,7 @@ export const useClients = () => {
       return updated;
     } catch (err) {
       toast.error('Failed to update client');
+      console.error('Error updating client:', err);
       throw err;
     }
   };
@@ -101,6 +113,7 @@ export const useClients = () => {
       toast.success('Client deleted successfully');
     } catch (err) {
       toast.error('Failed to delete client');
+      console.error('Error deleting client:', err);
       throw err;
     }
   };
@@ -113,6 +126,6 @@ export const useClients = () => {
     updateClient,
     deleteClient,
     canAddClient: canAddClient(),
-    refresh: fetchClients,
+    refresh: () => fetchClients(true),
   };
 };
