@@ -1,8 +1,10 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { Client, Invoice, InvoiceLineItem, Settings, View, InvoiceStatus } from '../../types';
-import { Plus, Search, Trash2, Edit, X, ArrowLeft, Printer, Copy, MoreVertical } from 'lucide-react';
+import { Plus, Search, Trash2, Edit, X, ArrowLeft, Download, Copy, MoreVertical } from 'lucide-react';
 import { useTranslation } from '../../lib/i18n';
+import { PDFDownloadLink } from '@react-pdf/renderer';
+import { InvoicePDF } from './InvoicePDF';
 
 interface InvoicesPageProps {
   invoices: Invoice[];
@@ -212,7 +214,28 @@ const InvoiceView: React.FC<Omit<InvoicesPageProps, 'view' | 'addInvoice' | 'dup
                     {invoice.status === 'Pending' && <button onClick={handleMarkAsPaid} className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600">{t('markAsPaid')}</button>}
                     <button onClick={() => { window.history.pushState({ usr: { invoiceToEdit: invoice } }, ''); setView({ page: 'invoiceForm' }); }} className="p-2 bg-gray-200 rounded-md hover:bg-gray-300 dark:bg-gray-700 dark:text-white dark:hover:bg-gray-600"><Edit size={20}/></button>
                     <button onClick={handleDelete} className="p-2 bg-red-500 text-white rounded-md hover:bg-red-600"><Trash2 size={20}/></button>
-                    <button onClick={() => window.print()} className="p-2 bg-[var(--color-primary)] text-white rounded-md hover:opacity-90"><Printer size={20}/></button>
+                    <PDFDownloadLink
+                        document={<InvoicePDF invoice={invoice} client={client} settings={settings} />}
+                        fileName={`invoice-${invoice.invoiceNumber}.pdf`}
+                        className="px-4 py-2 bg-[var(--color-primary)] text-white rounded-md hover:opacity-90 flex items-center space-x-2"
+                    >
+                        {({ loading }) => (
+                            loading ? (
+                                <span className="flex items-center space-x-2">
+                                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    <span>Loading...</span>
+                                </span>
+                            ) : (
+                                <>
+                                    <Download size={20} />
+                                    <span>Download PDF</span>
+                                </>
+                            )
+                        )}
+                    </PDFDownloadLink>
                 </div>
             </div>
 
