@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { clientsApi } from '../lib/api';
 import type { Database } from '../types/database';
@@ -10,32 +11,20 @@ type Client = Database['public']['Tables']['clients']['Row'];
 
 export const useClients = () => {
   const { profile, user } = useAuth();
-  const [clients, setClients] = useState<Client[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
+  const queryClient = useQueryClient();
 
-  // Fetch clients (with optional loading state)
-  const fetchClients = useCallback(async (showLoading = false) => {
-    try {
-      if (showLoading) setLoading(true);
-      const data = await clientsApi.getAll();
-      setClients(data);
-      setError(null);
-    } catch (err) {
-      setError(err as Error);
-      if (showLoading) {
-        toast.error('Failed to load clients');
-      }
-      console.error('Error fetching clients:', err);
-    } finally {
-      if (showLoading) setLoading(false);
-    }
-  }, []);
-
-  // Initial fetch
-  useEffect(() => {
-    fetchClients(true); // Show loading on initial fetch
-  }, [fetchClients]);
+  // Fetch clients with React Query
+  const {
+    data: clients = [],
+    isLoading: loading,
+    error,
+    refetch,
+  } = useQuery<Client[], Error>({
+    queryKey: ['clients'],
+    queryFn: async () => {
+      return await clientsApi.getAll();
+    },
+  });
 
   // Real-time subscription (user-specific)
   useEffect(() => {
@@ -49,12 +38,12 @@ export const useClients = () => {
           event: '*',
           schema: 'public',
           table: 'clients',
-          filter: `user_id=eq.${user.id}`, // ✅ Only listen to current user's changes
+          filter: `user_id=eq.${user.id}`,
         },
         async () => {
-          // Refetch in background (no loading state)
+          // Invalidate and refetch clients in background
           try {
-            await fetchClients(false);
+            await queryClient.invalidateQueries({ queryKey: ['clients'] });
           } catch (error) {
             console.error('Real-time sync error:', error);
           }
@@ -65,7 +54,7 @@ export const useClients = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user?.id, fetchClients]);
+  }, [user?.id, queryClient]);
 
   // Check if user can add more clients (free tier limit)
   const canAddClient = () => {
@@ -75,69 +64,117 @@ export const useClients = () => {
     return clients.length < FREE_TIER_LIMITS.MAX_CLIENTS;
   };
 
-  // Add client with limit check
-  const addClient = async (client: Omit<Client, 'id' | 'user_id' | 'created_at' | 'updated_at'>) => {
-    if (!canAddClient()) {
-      toast.error(`Free tier limit: Maximum ${FREE_TIER_LIMITS.MAX_CLIENTS} clients. Upgrade to add more!`);
-      return null;
-    }
+  // Add client mutation
+  const addClientMutation = useMutation({
+    mutationFn: async (client: Omit<Client, 'id' | 'user_id' | 'created_at' | 'updated_at'>) => {
+      if (!canAddClient()) {
+        throw new Error(`Free tier limit: Maximum ${FREE_TIER_LIMITS.MAX_CLIENTS} clients. Upgrade to add more!`);
+      }
+      return await clientsApi.create(client);
+    },
+    onMutate: async (newClient) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['clients'] });
 
-    try {
-      const newClient = await clientsApi.create(client);
+      // Snapshot previous value
+      const previousClients = queryClient.getQueryData<Client[]>(['clients']);
 
-      // Optimistic update: Immediately add to local state
-      setClients(prev => [newClient, ...prev]);
+      // Optimistically update cache
+      queryClient.setQueryData<Client[]>(['clients'], (old = []) => [
+        { ...newClient, id: 'temp-id', user_id: user?.id || '', created_at: new Date().toISOString(), updated_at: new Date().toISOString() } as Client,
+        ...old,
+      ]);
 
+      return { previousClients };
+    },
+    onSuccess: (newClient) => {
+      // Replace temp client with real one
+      queryClient.setQueryData<Client[]>(['clients'], (old = []) =>
+        old.map(client => client.id === 'temp-id' ? newClient : client)
+      );
       toast.success('Client added successfully');
-      return newClient;
-    } catch (err) {
-      toast.error('Failed to add client');
+    },
+    onError: (err, _newClient, context) => {
+      // Rollback on error
+      if (context?.previousClients) {
+        queryClient.setQueryData(['clients'], context.previousClients);
+      }
+      const error = err as Error;
+      toast.error(error.message || 'Failed to add client');
       console.error('Error adding client:', err);
-      throw err;
-    }
-  };
+    },
+  });
 
-  // Update client
-  const updateClient = async (id: string, updates: Partial<Client>) => {
-    try {
-      const updated = await clientsApi.update(id, updates);
+  // Update client mutation
+  const updateClientMutation = useMutation({
+    mutationFn: async ({ id, updates }: { id: string; updates: Partial<Client> }) => {
+      return await clientsApi.update(id, updates);
+    },
+    onMutate: async ({ id, updates }) => {
+      await queryClient.cancelQueries({ queryKey: ['clients'] });
+      const previousClients = queryClient.getQueryData<Client[]>(['clients']);
 
-      // Optimistic update: Immediately replace in local state
-      setClients(prev => prev.map(client => client.id === id ? updated : client));
+      // Optimistically update
+      queryClient.setQueryData<Client[]>(['clients'], (old = []) =>
+        old.map(client => client.id === id ? { ...client, ...updates } : client)
+      );
 
+      return { previousClients };
+    },
+    onSuccess: (updated) => {
+      // Update with real data
+      queryClient.setQueryData<Client[]>(['clients'], (old = []) =>
+        old.map(client => client.id === updated.id ? updated : client)
+      );
       toast.success('Client updated successfully');
-      return updated;
-    } catch (err) {
+    },
+    onError: (err, _variables, context) => {
+      if (context?.previousClients) {
+        queryClient.setQueryData(['clients'], context.previousClients);
+      }
       toast.error('Failed to update client');
       console.error('Error updating client:', err);
-      throw err;
-    }
-  };
+    },
+  });
 
-  // Delete client
-  const deleteClient = async (id: string) => {
-    try {
+  // Delete client mutation
+  const deleteClientMutation = useMutation({
+    mutationFn: async (id: string) => {
       await clientsApi.delete(id);
+      return id;
+    },
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: ['clients'] });
+      const previousClients = queryClient.getQueryData<Client[]>(['clients']);
 
-      // Optimistic update: Immediately remove from local state
-      setClients(prev => prev.filter(client => client.id !== id));
+      // Optimistically remove
+      queryClient.setQueryData<Client[]>(['clients'], (old = []) =>
+        old.filter(client => client.id !== id)
+      );
 
+      return { previousClients };
+    },
+    onSuccess: () => {
       toast.success('Client deleted successfully');
-    } catch (err) {
+    },
+    onError: (err, _id, context) => {
+      if (context?.previousClients) {
+        queryClient.setQueryData(['clients'], context.previousClients);
+      }
       toast.error('Failed to delete client');
       console.error('Error deleting client:', err);
-      throw err;
-    }
-  };
+    },
+  });
 
   return {
     clients,
     loading,
     error,
-    addClient,
-    updateClient,
-    deleteClient,
+    addClient: addClientMutation.mutateAsync,
+    updateClient: async (id: string, updates: Partial<Client>) =>
+      updateClientMutation.mutateAsync({ id, updates }),
+    deleteClient: deleteClientMutation.mutateAsync,
     canAddClient: canAddClient(),
-    refresh: () => fetchClients(true),
+    refresh: () => refetch(),
   };
 };
