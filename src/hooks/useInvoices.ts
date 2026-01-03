@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { invoicesApi, type InvoiceWithLineItems } from '../lib/api';
 import type { Database } from '../types/database';
@@ -11,39 +12,58 @@ type InvoiceLineItemInsert = Database['public']['Tables']['invoice_line_items'][
 
 export const useInvoices = () => {
   const { profile, user } = useAuth();
-  const [invoices, setInvoices] = useState<InvoiceWithLineItems[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
+  const queryClient = useQueryClient();
 
   // Pagination state
   const [page, setPage] = useState(1);
-  const [totalCount, setTotalCount] = useState(0);
   const pageSize = 20;
+
+  // Fetch invoices with React Query and pagination
+  const {
+    data,
+    isLoading: loading,
+    error,
+    refetch,
+  } = useQuery<{ data: InvoiceWithLineItems[]; count: number }, Error>({
+    queryKey: ['invoices', page],
+    queryFn: async () => {
+      return await invoicesApi.getAll({ page, pageSize });
+    },
+  });
+
+  const invoices = data?.data ?? [];
+  const totalCount = data?.count ?? 0;
   const totalPages = Math.ceil(totalCount / pageSize);
 
-  // Fetch invoices (with optional loading state)
-  const fetchInvoices = useCallback(async (showLoading = false, currentPage = page) => {
-    try {
-      if (showLoading) setLoading(true);
-      const { data, count } = await invoicesApi.getAll({ page: currentPage, pageSize });
-      setInvoices(data);
-      setTotalCount(count);
-      setError(null);
-    } catch (err) {
-      setError(err as Error);
-      if (showLoading) {
-        toast.error('Failed to load invoices');
-      }
-      console.error('Error fetching invoices:', err);
-    } finally {
-      if (showLoading) setLoading(false);
-    }
-  }, [page]);
-
-  // Initial fetch
+  // Real-time subscription (user-specific)
   useEffect(() => {
-    fetchInvoices(true, page); // Show loading on initial fetch
-  }, [page]); // Refetch when page changes
+    if (!user?.id) return;
+
+    const channel = supabase
+      .channel(`invoices_changes_${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'invoices',
+          filter: `user_id=eq.${user.id}`,
+        },
+        async () => {
+          try {
+            // Invalidate current page to refetch
+            await queryClient.invalidateQueries({ queryKey: ['invoices', page] });
+          } catch (error) {
+            console.error('Real-time sync error (invoices):', error);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, page, queryClient]);
 
   // Pagination controls
   const nextPage = useCallback(() => {
@@ -64,38 +84,6 @@ export const useInvoices = () => {
     }
   }, [totalPages]);
 
-  // Real-time subscription (user-specific)
-  useEffect(() => {
-    if (!user?.id) return;
-
-    const channel = supabase
-      .channel(`invoices_changes_${user.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'invoices',
-          filter: `user_id=eq.${user.id}`, // ✅ Only listen to current user's invoices
-        },
-        async () => {
-          try {
-            await fetchInvoices(false, page);
-          } catch (error) {
-            console.error('Real-time sync error (invoices):', error);
-          }
-        }
-      )
-      // ❌ REMOVED: invoice_line_items subscription (thundering herd problem)
-      // Line item changes trigger invoice updates via updated_at, so the invoices
-      // subscription above will catch all changes automatically
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user?.id, page, fetchInvoices]);
-
   // Check if user can add more invoices (free tier limit)
   const canAddInvoice = async () => {
     if (profile?.subscription_tier === 'pro') {
@@ -105,98 +93,129 @@ export const useInvoices = () => {
     return count < FREE_TIER_LIMITS.MAX_INVOICES_PER_MONTH;
   };
 
-  // Add invoice with limit check
-  const addInvoice = async (
-    invoice: Omit<InvoiceInsert, 'user_id' | 'invoice_number'>,
-    lineItems: Omit<InvoiceLineItemInsert, 'invoice_id'>[]
-  ) => {
-    const canAdd = await canAddInvoice();
-    if (!canAdd) {
-      toast.error(`Free tier limit: Maximum ${FREE_TIER_LIMITS.MAX_INVOICES_PER_MONTH} invoices per month. Upgrade for unlimited!`);
-      return null;
-    }
-
-    try {
-      const newInvoice = await invoicesApi.create(invoice, lineItems);
-
-      // Optimistic update: Immediately add to local state if on page 1
-      if (page === 1) {
-        setInvoices(prev => [newInvoice, ...prev.slice(0, pageSize - 1)]);
+  // Add invoice mutation
+  const addInvoiceMutation = useMutation({
+    mutationFn: async ({
+      invoice,
+      lineItems,
+    }: {
+      invoice: Omit<InvoiceInsert, 'user_id' | 'invoice_number'>;
+      lineItems: Omit<InvoiceLineItemInsert, 'invoice_id'>[];
+    }) => {
+      const canAdd = await canAddInvoice();
+      if (!canAdd) {
+        throw new Error(
+          `Free tier limit: Maximum ${FREE_TIER_LIMITS.MAX_INVOICES_PER_MONTH} invoices per month. Upgrade for unlimited!`
+        );
       }
-
-      // Refetch to update counts and ensure data consistency
-      await fetchInvoices(false, page);
-
+      return await invoicesApi.create(invoice, lineItems);
+    },
+    onSuccess: async () => {
+      // Invalidate all invoice pages to refresh data
+      await queryClient.invalidateQueries({ queryKey: ['invoices'] });
       toast.success('Invoice created successfully');
-      return newInvoice;
-    } catch (err) {
-      toast.error('Failed to create invoice');
+    },
+    onError: (err) => {
+      const error = err as Error;
+      toast.error(error.message || 'Failed to create invoice');
       console.error('Error creating invoice:', err);
-      throw err;
-    }
-  };
+    },
+  });
 
-  // Update invoice
-  const updateInvoice = async (
-    id: string,
-    updates: Partial<InvoiceInsert>,
-    lineItems?: Omit<InvoiceLineItemInsert, 'invoice_id'>[]
-  ) => {
-    try {
-      const updated = await invoicesApi.update(id, updates, lineItems);
+  // Update invoice mutation
+  const updateInvoiceMutation = useMutation({
+    mutationFn: async ({
+      id,
+      updates,
+      lineItems,
+    }: {
+      id: string;
+      updates: Partial<InvoiceInsert>;
+      lineItems?: Omit<InvoiceLineItemInsert, 'invoice_id'>[];
+    }) => {
+      return await invoicesApi.update(id, updates, lineItems);
+    },
+    onMutate: async ({ id, updates }) => {
+      // Cancel outgoing queries
+      await queryClient.cancelQueries({ queryKey: ['invoices', page] });
 
-      // Optimistic update: Immediately replace in local state
-      setInvoices(prev => prev.map(inv => inv.id === id ? updated : inv));
+      // Snapshot previous value
+      const previousData = queryClient.getQueryData<{ data: InvoiceWithLineItems[]; count: number }>(['invoices', page]);
 
-      // Refetch to ensure data consistency (in case update changed sort order)
-      await fetchInvoices(false, page);
+      // Optimistically update
+      queryClient.setQueryData<{ data: InvoiceWithLineItems[]; count: number }>(
+        ['invoices', page],
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            data: old.data.map(inv => inv.id === id ? { ...inv, ...updates } : inv),
+          };
+        }
+      );
 
+      return { previousData };
+    },
+    onSuccess: async (updated) => {
+      // Update with real data
+      queryClient.setQueryData<{ data: InvoiceWithLineItems[]; count: number }>(
+        ['invoices', page],
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            data: old.data.map(inv => inv.id === updated.id ? updated : inv),
+          };
+        }
+      );
       toast.success('Invoice updated successfully');
-      return updated;
-    } catch (err) {
+    },
+    onError: (err, _variables, context) => {
+      if (context?.previousData) {
+        queryClient.setQueryData(['invoices', page], context.previousData);
+      }
       toast.error('Failed to update invoice');
       console.error('Error updating invoice:', err);
-      throw err;
-    }
-  };
+    },
+  });
 
-  // Delete invoice
-  const deleteInvoice = async (id: string) => {
-    try {
+  // Delete invoice mutation
+  const deleteInvoiceMutation = useMutation({
+    mutationFn: async (id: string) => {
       await invoicesApi.delete(id);
+      return id;
+    },
+    onSuccess: async (_deletedId, _variables) => {
+      // Invalidate to refetch and handle pagination
+      await queryClient.invalidateQueries({ queryKey: ['invoices'] });
 
-      // Optimistic update: Immediately remove from local state
-      setInvoices(prev => prev.filter(inv => inv.id !== id));
-
-      // Refetch to update counts and ensure we're not on an empty page
-      await fetchInvoices(false, page);
-
-      // If the current page is now empty and we're not on page 1, go back one page
+      // Check if we need to go back a page
       const newTotalPages = Math.ceil((totalCount - 1) / pageSize);
       if (page > 1 && page > newTotalPages) {
         setPage(prev => prev - 1);
       }
 
       toast.success('Invoice deleted successfully');
-    } catch (err) {
+    },
+    onError: (err) => {
       toast.error('Failed to delete invoice');
       console.error('Error deleting invoice:', err);
-      throw err;
-    }
-  };
+    },
+  });
 
-  // Duplicate invoice
-  const duplicateInvoice = async (id: string) => {
-    const canAdd = await canAddInvoice();
-    if (!canAdd) {
-      toast.error(`Free tier limit: Maximum ${FREE_TIER_LIMITS.MAX_INVOICES_PER_MONTH} invoices per month. Upgrade for unlimited!`);
-      return null;
-    }
+  // Duplicate invoice mutation
+  const duplicateInvoiceMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const canAdd = await canAddInvoice();
+      if (!canAdd) {
+        throw new Error(
+          `Free tier limit: Maximum ${FREE_TIER_LIMITS.MAX_INVOICES_PER_MONTH} invoices per month. Upgrade for unlimited!`
+        );
+      }
 
-    try {
       const original = await invoicesApi.getById(id);
 
-      const newInvoice = await invoicesApi.create(
+      return await invoicesApi.create(
         {
           client_id: original.client_id,
           issue_date: new Date().toISOString().split('T')[0],
@@ -211,33 +230,35 @@ export const useInvoices = () => {
           rate: item.rate,
         }))
       );
-
-      // Optimistic update: Immediately add to local state if on page 1
-      if (page === 1) {
-        setInvoices(prev => [newInvoice, ...prev.slice(0, pageSize - 1)]);
-      }
-
-      // Refetch to update counts and ensure data consistency
-      await fetchInvoices(false, page);
-
+    },
+    onSuccess: async () => {
+      // Invalidate all pages
+      await queryClient.invalidateQueries({ queryKey: ['invoices'] });
       toast.success('Invoice duplicated successfully');
-      return newInvoice;
-    } catch (err) {
-      toast.error('Failed to duplicate invoice');
+    },
+    onError: (err) => {
+      const error = err as Error;
+      toast.error(error.message || 'Failed to duplicate invoice');
       console.error('Error duplicating invoice:', err);
-      throw err;
-    }
-  };
+    },
+  });
 
   return {
     invoices,
     loading,
     error,
-    addInvoice,
-    updateInvoice,
-    deleteInvoice,
-    duplicateInvoice,
-    refresh: () => fetchInvoices(true, page),
+    addInvoice: async (
+      invoice: Omit<InvoiceInsert, 'user_id' | 'invoice_number'>,
+      lineItems: Omit<InvoiceLineItemInsert, 'invoice_id'>[]
+    ) => addInvoiceMutation.mutateAsync({ invoice, lineItems }),
+    updateInvoice: async (
+      id: string,
+      updates: Partial<InvoiceInsert>,
+      lineItems?: Omit<InvoiceLineItemInsert, 'invoice_id'>[]
+    ) => updateInvoiceMutation.mutateAsync({ id, updates, lineItems }),
+    deleteInvoice: deleteInvoiceMutation.mutateAsync,
+    duplicateInvoice: duplicateInvoiceMutation.mutateAsync,
+    refresh: () => refetch(),
     // Pagination
     page,
     totalPages,

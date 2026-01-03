@@ -6,6 +6,7 @@ interface InvoicePDFProps {
   invoice: Invoice;
   client: Client;
   settings: Settings;
+  t: (key: string) => string; // Translation function
 }
 
 // Create professional styles
@@ -219,7 +220,7 @@ const styles = StyleSheet.create({
   },
 });
 
-export const InvoicePDF: React.FC<InvoicePDFProps> = ({ invoice, client, settings }) => {
+export const InvoicePDF: React.FC<InvoicePDFProps> = ({ invoice, client, settings, t }) => {
   // Calculate totals
   const subtotal = invoice.lineItems.reduce((acc, item) => acc + item.quantity * item.rate, 0);
   const taxAmount = subtotal * (invoice.taxRate / 100);
@@ -242,11 +243,11 @@ export const InvoicePDF: React.FC<InvoicePDFProps> = ({ invoice, client, setting
             <Text style={styles.companyDetails}>{settings.companyAddress}</Text>
             <Text style={styles.companyDetails}>{settings.companyEmail}</Text>
             {settings.companyVAT && (
-              <Text style={styles.companyDetails}>VAT: {settings.companyVAT}</Text>
+              <Text style={styles.companyDetails}>{t('vatLabel')}: {settings.companyVAT}</Text>
             )}
           </View>
           <View style={styles.headerRight}>
-            <Text style={styles.invoiceTitle}>INVOICE</Text>
+            <Text style={styles.invoiceTitle}>{t('invoice').toUpperCase()}</Text>
             <Text style={styles.invoiceNumber}>#{invoice.invoiceNumber}</Text>
             <View
               style={[
@@ -262,22 +263,22 @@ export const InvoicePDF: React.FC<InvoicePDFProps> = ({ invoice, client, setting
         {/* Bill To and Dates */}
         <View style={styles.billToContainer}>
           <View style={styles.billToBox}>
-            <Text style={styles.sectionTitle}>Bill To</Text>
+            <Text style={styles.sectionTitle}>{t('billTo')}</Text>
             <Text style={styles.clientName}>{client.name}</Text>
             <Text style={styles.clientDetails}>{client.address}</Text>
             <Text style={styles.clientDetails}>{client.email}</Text>
             {client.vatNumber && (
-              <Text style={styles.clientDetails}>VAT: {client.vatNumber}</Text>
+              <Text style={styles.clientDetails}>{t('vatLabel')}: {client.vatNumber}</Text>
             )}
           </View>
           <View style={styles.billToBox}>
             <View style={{ marginBottom: 12 }}>
-              <Text style={styles.dateLabel}>Issue Date</Text>
+              <Text style={styles.dateLabel}>{t('issueDate')}</Text>
               <Text style={styles.dateValue}>{invoice.issueDate}</Text>
             </View>
             <View>
-              <Text style={styles.dateLabel}>Due Date</Text>
-              <Text style={styles.dateValue}>{invoice.dueDate || 'Not specified'}</Text>
+              <Text style={styles.dateLabel}>{t('dueDate')}</Text>
+              <Text style={styles.dateValue}>{invoice.dueDate || t('notSpecified')}</Text>
             </View>
           </View>
         </View>
@@ -285,10 +286,10 @@ export const InvoicePDF: React.FC<InvoicePDFProps> = ({ invoice, client, setting
         {/* Line Items Table */}
         <View style={styles.table}>
           <View style={styles.tableHeader}>
-            <Text style={[styles.tableHeaderText, styles.descriptionCell]}>Description</Text>
-            <Text style={[styles.tableHeaderText, styles.quantityCell]}>Quantity</Text>
-            <Text style={[styles.tableHeaderText, styles.rateCell]}>Rate</Text>
-            <Text style={[styles.tableHeaderText, styles.totalCell]}>Total</Text>
+            <Text style={[styles.tableHeaderText, styles.descriptionCell]}>{t('description')}</Text>
+            <Text style={[styles.tableHeaderText, styles.quantityCell]}>{t('quantity')}</Text>
+            <Text style={[styles.tableHeaderText, styles.rateCell]}>{t('rate')}</Text>
+            <Text style={[styles.tableHeaderText, styles.totalCell]}>{t('total')}</Text>
           </View>
           {invoice.lineItems.map((item, index) => {
             const itemTotal = item.quantity * item.rate;
@@ -314,19 +315,19 @@ export const InvoicePDF: React.FC<InvoicePDFProps> = ({ invoice, client, setting
         {/* Summary */}
         <View style={styles.summaryContainer}>
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Subtotal</Text>
+            <Text style={styles.summaryLabel}>{t('subtotal')}</Text>
             <Text style={styles.summaryValue}>
               {settings.currencySymbol}{subtotal.toFixed(2)}
             </Text>
           </View>
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Tax ({invoice.taxRate}%)</Text>
+            <Text style={styles.summaryLabel}>{t('tax')} ({invoice.taxRate}%)</Text>
             <Text style={styles.summaryValue}>
               {settings.currencySymbol}{taxAmount.toFixed(2)}
             </Text>
           </View>
           <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>Total</Text>
+            <Text style={styles.totalLabel}>{t('total')}</Text>
             <Text style={styles.totalValue}>
               {settings.currencySymbol}{total.toFixed(2)}
             </Text>

@@ -37,7 +37,7 @@ const InvoiceForm: React.FC<Omit<InvoicesPageProps, 'invoices' | 'view' | 'delet
             return {
                 ...sourceInvoice,
                 issueDate: invoiceToDuplicate ? new Date().toISOString().split('T')[0] : sourceInvoice.issueDate,
-                dueDate: invoiceToDuplicate ? '' : sourceInvoice.dueDate,
+                dueDate: invoiceToDuplicate ? new Date().toISOString().split('T')[0] : sourceInvoice.dueDate,
                 status: (invoiceToDuplicate ? 'Pending' : sourceInvoice.status) as InvoiceStatus
             };
         }
@@ -270,7 +270,7 @@ const InvoiceView: React.FC<Omit<InvoicesPageProps, 'view' | 'addInvoice' | 'dup
                     <button onClick={() => { window.history.pushState({ usr: { invoiceToEdit: invoice } }, ''); setView({ page: 'invoiceForm' }); }} className="p-2 bg-gray-200 rounded-md hover:bg-gray-300 dark:bg-gray-700 dark:text-white dark:hover:bg-gray-600"><Edit size={20}/></button>
                     <button onClick={handleDelete} className="p-2 bg-red-500 text-white rounded-md hover:bg-red-600"><Trash2 size={20}/></button>
                     <PDFDownloadLink
-                        document={<InvoicePDF invoice={invoice} client={client} settings={settings} />}
+                        document={<InvoicePDF invoice={invoice} client={client} settings={settings} t={t} />}
                         fileName={`invoice-${invoice.invoiceNumber}.pdf`}
                         className="px-4 py-2 bg-[var(--color-primary)] text-white rounded-md hover:opacity-90 flex items-center space-x-2"
                     >
