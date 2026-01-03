@@ -5,6 +5,7 @@ import { Plus, Search, Trash2, Edit, X, ArrowLeft, Download, Copy, MoreVertical 
 import { useTranslation } from '../../lib/i18n';
 import { PDFDownloadLink } from '@react-pdf/renderer';
 import { InvoicePDF } from './InvoicePDF';
+import toast from 'react-hot-toast';
 
 interface InvoicesPageProps {
   invoices: Invoice[];
@@ -81,6 +82,35 @@ const InvoiceForm: React.FC<Omit<InvoicesPageProps, 'invoices' | 'view' | 'delet
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+
+        // Validate clientId
+        if (!invoiceData.clientId || invoiceData.clientId.trim() === '') {
+            toast.error('Please select a client');
+            return;
+        }
+
+        // Validate dueDate
+        if (!invoiceData.dueDate || invoiceData.dueDate.trim() === '') {
+            toast.error('Please select a due date');
+            return;
+        }
+
+        // Validate line items
+        if (invoiceData.lineItems.length === 0) {
+            toast.error('Please add at least one line item');
+            return;
+        }
+
+        // Validate that at least one line item has a description and amount
+        const hasValidLineItem = invoiceData.lineItems.some(
+            item => item.description.trim() !== '' && item.quantity > 0 && item.rate > 0
+        );
+
+        if (!hasValidLineItem) {
+            toast.error('Please add at least one line item with description, quantity, and rate');
+            return;
+        }
+
         if ('id' in invoiceData) {
             updateInvoice(invoiceData as Invoice);
         } else {
@@ -112,7 +142,7 @@ const InvoiceForm: React.FC<Omit<InvoicesPageProps, 'invoices' | 'view' | 'delet
                 </div>
                 <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('dueDate')}</label>
-                    <input type="date" name="dueDate" value={invoiceData.dueDate} onChange={handleInputChange} className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)] sm:text-sm text-gray-900 dark:text-gray-200" />
+                    <input type="date" name="dueDate" value={invoiceData.dueDate} onChange={handleInputChange} required className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)] sm:text-sm text-gray-900 dark:text-gray-200" />
                 </div>
             </div>
 
