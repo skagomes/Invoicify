@@ -20,7 +20,7 @@ export const MainApp: React.FC = () => {
   // Use Supabase hooks for data
   const { clients, addClient, updateClient, deleteClient, canAddClient } = useClients();
   const { invoices, addInvoice, updateInvoice, deleteInvoice, duplicateInvoice } = useInvoices();
-  const { settings, updateSettings, uploadLogo } = useSettings();
+  const { settings, loading: settingsLoading, error: settingsError, updateSettings, uploadLogo } = useSettings();
 
   // Apply custom colors
   useEffect(() => {
@@ -104,12 +104,40 @@ export const MainApp: React.FC = () => {
   );
 
   // Show loading state while settings load
-  if (!settings) {
+  if (settingsLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
           <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state if settings failed to load
+  if (settingsError || !settings) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center max-w-md px-4">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+            <h2 className="text-xl font-bold text-red-900 mb-2">Failed to Load Settings</h2>
+            <p className="text-red-700 mb-4">
+              {settingsError?.message || 'Unable to load your account settings. This may be due to a database issue.'}
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+            >
+              Retry
+            </button>
+            <button
+              onClick={handleSignOut}
+              className="ml-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+            >
+              Sign Out
+            </button>
+          </div>
         </div>
       </div>
     );
