@@ -14,6 +14,8 @@ export const useSettings = () => {
   // Fetch settings
   // isInitial: true = show loading spinner, false = background refresh
   const fetchSettings = useCallback(async (isInitial: boolean = true) => {
+    let timeoutId: NodeJS.Timeout | null = null;
+
     try {
       // Only show loading spinner on initial load, not on background refreshes
       if (isInitial) {
@@ -21,7 +23,19 @@ export const useSettings = () => {
       }
       setError(null); // Clear previous errors
 
+      // Safety timeout: If settingsApi.get() hangs, force stop loading after 5 seconds
+      if (isInitial) {
+        timeoutId = setTimeout(() => {
+          console.warn('Settings fetch timeout - forcing loading to false');
+          setError(new Error('Settings load timeout. Please refresh the page.'));
+          setLoading(false);
+        }, 5000);
+      }
+
       const data = await settingsApi.get();
+
+      // Clear timeout if we got a response
+      if (timeoutId) clearTimeout(timeoutId);
 
       // If no settings exist, rely on the database trigger 'handle_new_user' to create them.
       // Don't attempt client-side creation to avoid race conditions and duplicate key errors.
@@ -35,11 +49,22 @@ export const useSettings = () => {
         setError(null);
       }
     } catch (err) {
+      // Clear timeout on error
+      if (timeoutId) clearTimeout(timeoutId);
+
       console.error('Error in fetchSettings:', err);
       const error = err as Error;
-      setError(error);
-      if (isInitial) {
-        toast.error('Failed to load settings. Please try refreshing the page.');
+
+      // Check if user is not authenticated
+      if (error.message === 'Not authenticated') {
+        console.warn('User not authenticated - clearing settings');
+        setSettings(null);
+        setError(null); // Don't show error for unauthenticated users
+      } else {
+        setError(error);
+        if (isInitial) {
+          toast.error('Failed to load settings. Please try refreshing the page.');
+        }
       }
     } finally {
       if (isInitial) {
