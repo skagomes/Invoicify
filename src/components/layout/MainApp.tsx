@@ -13,12 +13,17 @@ import { useInvoices } from '../../hooks/useInvoices';
 import { useSettings } from '../../hooks/useSettings';
 import { clsx } from 'clsx';
 import toast from 'react-hot-toast';
+import type { View } from '../../types';
 
 export const MainApp: React.FC = () => {
   const { t } = useTranslation();
   const { signOut, user, profile } = useAuth();
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // View state management for internal navigation
+  const [clientsView, setClientsView] = useState<View>({ page: 'clients' });
+  const [invoicesView, setInvoicesView] = useState<View>({ page: 'invoices' });
 
   // Use Supabase hooks for data
   const { clients, addClient, updateClient, deleteClient, canAddClient } = useClients();
@@ -56,10 +61,13 @@ export const MainApp: React.FC = () => {
     }
   };
 
-  const NavItem: React.FC<{ to: string; icon: React.ReactNode; label: string }> = ({ to, icon, label }) => (
+  const NavItem: React.FC<{ to: string; icon: React.ReactNode; label: string; onClick?: () => void }> = ({ to, icon, label, onClick }) => (
     <NavLink
       to={to}
-      onClick={() => setIsMobileMenuOpen(false)}
+      onClick={() => {
+        setIsMobileMenuOpen(false);
+        onClick?.();
+      }}
       className={({ isActive }) =>
         clsx(
           'flex items-center w-full px-4 py-2 text-sm font-medium rounded-lg transition-colors duration-200',
@@ -86,8 +94,8 @@ export const MainApp: React.FC = () => {
 
       <nav className="flex flex-col flex-1 space-y-2">
         <NavItem to="/dashboard" icon={<LayoutDashboard size={20} />} label={t('dashboard')} />
-        <NavItem to="/invoices" icon={<FileText size={20} />} label={t('invoices')} />
-        <NavItem to="/clients" icon={<Users size={20} />} label={t('clients')} />
+        <NavItem to="/invoices" icon={<FileText size={20} />} label={t('invoices')} onClick={() => setInvoicesView({ page: 'invoices' })} />
+        <NavItem to="/clients" icon={<Users size={20} />} label={t('clients')} onClick={() => setClientsView({ page: 'clients' })} />
         <NavItem to="/settings" icon={<SettingsIcon size={20} />} label={t('settings')} />
       </nav>
 
@@ -178,8 +186,8 @@ export const MainApp: React.FC = () => {
         {isMobileMenuOpen && (
           <nav className="print-hidden md:hidden p-4 bg-white dark:bg-gray-800 space-y-2 border-b dark:border-gray-700">
             <NavItem to="/dashboard" icon={<LayoutDashboard size={20} />} label={t('dashboard')} />
-            <NavItem to="/invoices" icon={<FileText size={20} />} label={t('invoices')} />
-            <NavItem to="/clients" icon={<Users size={20} />} label={t('clients')} />
+            <NavItem to="/invoices" icon={<FileText size={20} />} label={t('invoices')} onClick={() => setInvoicesView({ page: 'invoices' })} />
+            <NavItem to="/clients" icon={<Users size={20} />} label={t('clients')} onClick={() => setClientsView({ page: 'clients' })} />
             <NavItem to="/settings" icon={<SettingsIcon size={20} />} label={t('settings')} />
             <button
               onClick={handleSignOut}
@@ -251,8 +259,8 @@ export const MainApp: React.FC = () => {
                       rate: Number(li.rate),
                     })),
                   }))}
-                  view={{ page: 'clients' }}
-                  setView={() => {}}
+                  view={clientsView}
+                  setView={setClientsView}
                   addClient={async (client) => {
                     await addClient({
                       name: client.name,
@@ -318,8 +326,8 @@ export const MainApp: React.FC = () => {
                     defaultTaxRate: Number(settings.default_tax_rate),
                     language: settings.language as 'en' | 'fr',
                   }}
-                  view={{ page: 'invoices' }}
-                  setView={() => {}}
+                  view={invoicesView}
+                  setView={setInvoicesView}
                   addInvoice={async (invoice) => {
                     await addInvoice(
                       {
