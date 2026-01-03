@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { invoicesApi, type InvoiceWithLineItems } from '../lib/api';
 import type { Database } from '../types/database';
@@ -10,44 +10,54 @@ type InvoiceInsert = Database['public']['Tables']['invoices']['Insert'];
 type InvoiceLineItemInsert = Database['public']['Tables']['invoice_line_items']['Insert'];
 
 export const useInvoices = () => {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const [invoices, setInvoices] = useState<InvoiceWithLineItems[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  // Fetch invoices
-  const fetchInvoices = async () => {
+  // Fetch invoices (with optional loading state)
+  const fetchInvoices = useCallback(async (showLoading = false) => {
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
       const data = await invoicesApi.getAll();
       setInvoices(data);
       setError(null);
     } catch (err) {
       setError(err as Error);
-      toast.error('Failed to load invoices');
+      if (showLoading) {
+        toast.error('Failed to load invoices');
+      }
+      console.error('Error fetching invoices:', err);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
-  };
+  }, []);
 
   // Initial fetch
   useEffect(() => {
-    fetchInvoices();
-  }, []);
+    fetchInvoices(true); // Show loading on initial fetch
+  }, [fetchInvoices]);
 
-  // Real-time subscription
+  // Real-time subscription (user-specific)
   useEffect(() => {
+    if (!user?.id) return;
+
     const channel = supabase
-      .channel('invoices_changes')
+      .channel(`invoices_changes_${user.id}`)
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
           table: 'invoices',
+          filter: `user_id=eq.${user.id}`, // ✅ Only listen to current user's invoices
         },
-        () => {
-          fetchInvoices();
+        async () => {
+          try {
+            await fetchInvoices(false);
+          } catch (error) {
+            console.error('Real-time sync error (invoices):', error);
+          }
         }
       )
       .on(
@@ -56,9 +66,15 @@ export const useInvoices = () => {
           event: '*',
           schema: 'public',
           table: 'invoice_line_items',
+          // Note: Can't filter by user_id here since line_items don't have user_id
+          // This will trigger for all users, but the fetchInvoices() call has RLS
         },
-        () => {
-          fetchInvoices();
+        async () => {
+          try {
+            await fetchInvoices(false);
+          } catch (error) {
+            console.error('Real-time sync error (line items):', error);
+          }
         }
       )
       .subscribe();
@@ -66,7 +82,7 @@ export const useInvoices = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [user?.id, fetchInvoices]);
 
   // Check if user can add more invoices (free tier limit)
   const canAddInvoice = async () => {
@@ -94,6 +110,7 @@ export const useInvoices = () => {
       return newInvoice;
     } catch (err) {
       toast.error('Failed to create invoice');
+      console.error('Error creating invoice:', err);
       throw err;
     }
   };
@@ -110,6 +127,7 @@ export const useInvoices = () => {
       return updated;
     } catch (err) {
       toast.error('Failed to update invoice');
+      console.error('Error updating invoice:', err);
       throw err;
     }
   };
@@ -121,6 +139,7 @@ export const useInvoices = () => {
       toast.success('Invoice deleted successfully');
     } catch (err) {
       toast.error('Failed to delete invoice');
+      console.error('Error deleting invoice:', err);
       throw err;
     }
   };
@@ -156,6 +175,7 @@ export const useInvoices = () => {
       return newInvoice;
     } catch (err) {
       toast.error('Failed to duplicate invoice');
+      console.error('Error duplicating invoice:', err);
       throw err;
     }
   };
@@ -168,6 +188,6 @@ export const useInvoices = () => {
     updateInvoice,
     deleteInvoice,
     duplicateInvoice,
-    refresh: fetchInvoices,
+    refresh: () => fetchInvoices(true),
   };
 };
