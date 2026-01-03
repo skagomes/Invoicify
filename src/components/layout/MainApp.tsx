@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Routes, Route, NavLink, Navigate } from 'react-router-dom';
+import { Routes, Route, NavLink, Navigate, useNavigate } from 'react-router-dom';
 import Dashboard from '../dashboard/Dashboard';
 import ClientsPage from '../clients/ClientsPage';
 import InvoicesPage from '../invoices/InvoicesPage';
 import SettingsPage from '../settings/SettingsPage';
+import { NotFoundPage } from '../NotFoundPage';
 import { FileText, Users, LayoutDashboard, Settings as SettingsIcon, Menu, X, LogOut } from 'lucide-react';
 import { useTranslation } from '../../lib/i18n';
 import { useAuth } from '../../contexts/AuthContext';
@@ -11,10 +12,12 @@ import { useClients } from '../../hooks/useClients';
 import { useInvoices } from '../../hooks/useInvoices';
 import { useSettings } from '../../hooks/useSettings';
 import { clsx } from 'clsx';
+import toast from 'react-hot-toast';
 
 export const MainApp: React.FC = () => {
   const { t } = useTranslation();
   const { signOut, user, profile } = useAuth();
+  const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Use Supabase hooks for data
@@ -40,7 +43,17 @@ export const MainApp: React.FC = () => {
   }, [settings?.primary_color, settings?.secondary_color]);
 
   const handleSignOut = async () => {
-    await signOut();
+    try {
+      await signOut();
+      toast.success('Signed out successfully');
+      // Navigate to login page explicitly
+      navigate('/login', { replace: true });
+    } catch (error) {
+      console.error('Sign out error:', error);
+      toast.error('Failed to sign out');
+      // Still try to navigate to login even if there's an error
+      navigate('/login', { replace: true });
+    }
   };
 
   const NavItem: React.FC<{ to: string; icon: React.ReactNode; label: string }> = ({ to, icon, label }) => (
@@ -392,6 +405,8 @@ export const MainApp: React.FC = () => {
               }
             />
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            {/* 404 Page - Must be last */}
+            <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </main>
       </div>
